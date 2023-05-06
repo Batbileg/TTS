@@ -33,7 +33,7 @@ coqpit>=0.0.16
 jieba
 pypinyin
 # japanese g2p deps
-mecab-python3==1.0.5
+# mecab-python3==1.0.5
 unidic-lite==1.0.8
 # gruut+supported langs
 gruut[de,es,fr]==2.2.3
@@ -41,6 +41,7 @@ gruut[de,es,fr]==2.2.3
 jamo
 nltk
 g2pkk>=0.1.1
+gevent
 # deps for bangla
 bangla==0.0.2
 bnnumerizer

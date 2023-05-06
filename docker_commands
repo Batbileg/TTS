@@ -1,0 +1,4 @@
+sudo docker commit 28480a34c85d modified_tts
+docker run --rm -it -p 5002:5002 --platform linux/amd64 --entrypoint /bin/bash ghcr.io/coqui-ai/tts-cpu --memory="3g" --cpus="3.0"
+python TTS/server/server.py --model_name tts_models/en/ljspeech/fast_pitch --vocoder_name vocoder_models/en/ljspeech/hifigan_v2
+python3 TTS/server/server.py --model_name tts_models/en/ljspeech/fast_pitch --vocoder_name vocoder_models/en/ljspeech/hifigan_v2

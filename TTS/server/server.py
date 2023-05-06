@@ -13,7 +13,11 @@ from flask import Flask, render_template, render_template_string, request, send_
 
 from TTS.config import load_config
 from TTS.utils.manage import ModelManager
-from TTS.utils.synthesizer import Synthesizer
+from TTS.utils.synthesizer_modified import SynthesizerModified
+import threading
+from gevent import monkey
+# monkey.patch_all()
+from gevent.pywsgi import WSGIServer
 
 
 def create_argparser():
@@ -21,7 +25,7 @@ def create_argparser():
         return x.lower() in ["true", "1", "yes"]
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
+    parser.add_argument(        
         "--list_models",
         type=convert_boolean,
         nargs="?",
@@ -101,7 +105,7 @@ if args.vocoder_path is not None:
     vocoder_config_path = args.vocoder_config_path
 
 # load models
-synthesizer = Synthesizer(
+synthesizer = SynthesizerModified(
     tts_checkpoint=model_path,
     tts_config_path=config_path,
     tts_speakers_file=speakers_file_path,
@@ -180,21 +184,21 @@ def details():
 lock = Lock()
 
 
-@app.route("/api/tts", methods=["GET"])
-def tts():
-    with lock:
-        text = request.args.get("text")
-        speaker_idx = request.args.get("speaker_id", "")
-        language_idx = request.args.get("language_id", "")
-        style_wav = request.args.get("style_wav", "")
-        style_wav = style_wav_uri_to_dict(style_wav)
-        print(f" > Model input: {text}")
-        print(f" > Speaker Idx: {speaker_idx}")
-        print(f" > Language Idx: {language_idx}")
-        wavs = synthesizer.tts(text, speaker_name=speaker_idx, language_name=language_idx, style_wav=style_wav)
-        out = io.BytesIO()
-        synthesizer.save_wav(wavs, out)
-    return send_file(out, mimetype="audio/wav")
+# @app.route("/api/tts", methods=["GET"])
+# def tts():
+#     with lock:
+#         text = request.args.get("text")
+#         speaker_idx = request.args.get("speaker_id", "")
+#         language_idx = request.args.get("language_id", "")
+#         style_wav = request.args.get("style_wav", "")
+#         style_wav = style_wav_uri_to_dict(style_wav)
+#         print(f" > Model input: {text}")
+#         print(f" > Speaker Idx: {speaker_idx}")
+#         print(f" > Language Idx: {language_idx}")
+#         wavs = synthesizer.tts(text, speaker_name=speaker_idx, language_name=language_idx, style_wav=style_wav, tts_type = 0)
+#         out = io.BytesIO()
+#         synthesizer.save_wav(wavs, out)
+#     return send_file(out, mimetype="audio/wav")
 
 
 # Basic MaryTTS compatibility layer
@@ -224,25 +228,45 @@ def mary_tts_api_voices():
     )
 
 
-@app.route("/process", methods=["GET", "POST"])
-def mary_tts_api_process():
-    """MaryTTS-compatible /process endpoint"""
-    with lock:
-        if request.method == "POST":
-            data = parse_qs(request.get_data(as_text=True))
-            # NOTE: we ignore param. LOCALE and VOICE for now since we have only one active model
-            text = data.get("INPUT_TEXT", [""])[0]
-        else:
-            text = request.args.get("INPUT_TEXT", "")
-        print(f" > Model input: {text}")
-        wavs = synthesizer.tts(text)
-        out = io.BytesIO()
-        synthesizer.save_wav(wavs, out)
-    return send_file(out, mimetype="audio/wav")
+# @app.route("/process", methods=["GET", "POST"])
+# def mary_tts_api_process():
+#     """MaryTTS-compatible /process endpoint"""
+#     with lock:
+#         if request.method == "POST":
+#             data = parse_qs(request.get_data(as_text=True))
+#             # NOTE: we ignore param. LOCALE and VOICE for now since we have only one active model
+#             text = data.get("INPUT_TEXT", [""])[0]
+#         else:
+#             text = request.args.get("INPUT_TEXT", "")
+#         print(f" > Model input: {text}")
+#         wavs = synthesizer.tts(text,tts_type=0)
+#         out = io.BytesIO()
+#         synthesizer.save_wav(wavs, out)
+#     return send_file(out, mimetype="audio/wav")
 
+@app.route("/api/raconteur", methods=["GET"])
+def raconteur():
+    with lock:
+        print("----------------------")
+        print(request.args)
+        print("----------------------")
+        text = request.args.get("text")
+        speaker_idx = request.args.get("speaker_id", "")
+        language_idx = request.args.get("language_id", "")
+        style_wav = request.args.get("style_wav", "")
+        sentence_id = request.args.get("sentence_id", "")
+        style_wav = style_wav_uri_to_dict(style_wav)
+        print(" > Model input: {}".format(text))
+        print(" > Speaker Idx: {}".format(speaker_idx))
+        print(" > Language Idx: {}".format(language_idx))
+        synthesizer_dict = synthesizer.tts(text, speaker_name=speaker_idx, language_name=language_idx, style_wav=style_wav, sentence_id=sentence_id, tts_type=1)
+    # return json.dumps(synthesizer_dict["text_data"])
+    return json.dumps(synthesizer_dict)
 
 def main():
-    app.run(debug=args.debug, host="::", port=args.port)
+    http_server = WSGIServer(('::',args.port),app)
+    http_server.serve_forever()
+    # app.run(debug=args.debug, host="::", port=args.port)
 
 
 if __name__ == "__main__":
